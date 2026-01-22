@@ -85,20 +85,85 @@ Built by neeraj_mehta as part of exploring multi-agent orchestration patterns in
 
 
 
-## 📄 License
-
-MIT License
+##  Implementation flow
 ```
 
 ---
 
 ```
-Topics: 
-- ai-agents
-- langgraph
-- procurement-automation
-- workflow-orchestration
-- anthropic-claude
-- mcp-servers
-- aws-step-functions
-- enterprise-ai
+graph TB
+    subgraph "User Layer"
+        User[User Submits Request]
+    end
+    
+    subgraph "Orchestration Layer - Rule-Based"
+        Orchestrator[Workflow Orchestrator<br/>Rule Engine]
+        
+        subgraph "Rule-Based Validators"
+            DepCheck[Dependency Validator<br/>if vendor.status == 'approved']
+            AmountRouter[Amount-Based Router<br/>if amount <= 150K → L1<br/>elif amount <= 650K → L2<br/>else → L3]
+            QtyValidator[Quantity Validator<br/>if GRN_qty > PO_qty → REJECT]
+            StateEngine[State Machine<br/>Deterministic Transitions]
+        end
+    end
+    
+    subgraph "AI Layer - Selective Use"
+        VendorAgent[Vendor Risk Agent<br/>AI-Powered<br/>Multi-factor risk scoring]
+        SKUAgent[SKU Matching Agent<br/>AI-Powered<br/>Fuzzy semantic matching]
+        DocAgent[Document Processing Agent<br/>AI-Powered<br/>OCR + line item reconciliation]
+    end
+    
+    subgraph "Human Decision Layer"
+        Central[Central Manager]
+        Parallel[Parallel Approvers]
+        Finance[Finance Team]
+        Legal[Legal Team]
+        Business[Business Team]
+    end
+    
+    subgraph "Data Layer"
+        DB[(PostgreSQL<br/>State & Records)]
+        S3[(AWS S3<br/>Documents)]
+    end
+    
+    User --> Orchestrator
+    
+    Orchestrator --> DepCheck
+    Orchestrator --> AmountRouter
+    Orchestrator --> QtyValidator
+    Orchestrator --> StateEngine
+    
+    Orchestrator -.->|Only when needed| VendorAgent
+    Orchestrator -.->|Only when needed| SKUAgent
+    Orchestrator -.->|Only when needed| DocAgent
+    
+    DepCheck --> Orchestrator
+    AmountRouter --> Orchestrator
+    QtyValidator --> Orchestrator
+    VendorAgent -.-> Orchestrator
+    SKUAgent -.-> Orchestrator
+    DocAgent -.-> Orchestrator
+    
+    Orchestrator --> Central
+    Orchestrator --> Parallel
+    
+    Parallel --> Finance
+    Parallel --> Legal
+    Parallel --> Business
+    
+    Orchestrator --> DB
+    Orchestrator --> S3
+    
+    Finance --> DB
+    Legal --> DB
+    Business --> DB
+    
+    style Orchestrator fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    style VendorAgent fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style SKUAgent fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style DocAgent fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style DepCheck fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style AmountRouter fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style QtyValidator fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style StateEngine fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style Parallel fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px

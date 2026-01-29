@@ -119,7 +119,7 @@ def aggregate_dept_approvals(state: VendorOnboardingState) -> VendorOnboardingSt
     All departments must approve for vendor to be approved.
     """
     approvals = state['dept_approvals']
-    
+
     # Check if all departments have responded
     if any(v is None for v in approvals.values()):
         # Still waiting for approvals

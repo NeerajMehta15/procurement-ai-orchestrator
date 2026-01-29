@@ -3,7 +3,7 @@ LangGraph workflow compilation with PostgreSQL checkpointing.
 Compiles all workflow graphs and makes them ready for execution.
 """
 
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.memory import InMemorySaver
 from orchestrator.vendor_onboarding import create_vendor_onboarding_workflow
 import os
 from dotenv import load_dotenv
@@ -13,19 +13,29 @@ load_dotenv()
 # Database connection for checkpointing
 DB_URI = os.getenv("DATABASE_URL")
 
-if not DB_URI:
-    raise ValueError("DATABASE_URL environment variable not set")
+USE_POSTGRES_CHECKPOINT = os.getenv("USE_POSTGRES_CHECKPOINT", "false").lower() == "true"
 
-# Initialize PostgreSQL checkpointer
-# This creates necessary tables for LangGraph state persistence
-checkpointer = PostgresSaver.from_conn_string(DB_URI)
+if USE_POSTGRES_CHECKPOINT:
+    if not DB_URI:
+        raise ValueError("DATABASE_URL environment variable not set")
 
-# Setup checkpoint tables (run once)
-try:
-    checkpointer.setup()
-    print("✓ LangGraph checkpoint tables initialized")
-except Exception as e:
-    print(f"Note: Checkpoint tables may already exist ({e})")
+    # Initialize PostgreSQL checkpointer with connection pool
+    from psycopg_pool import ConnectionPool
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    pool = ConnectionPool(conninfo=DB_URI)
+    checkpointer = PostgresSaver(pool)
+
+    # Setup checkpoint tables (run once)
+    try:
+        checkpointer.setup()
+        print("✓ LangGraph checkpoint tables initialized")
+    except Exception as e:
+        print(f"Note: Checkpoint tables may already exist ({e})")
+else:
+    # Use in-memory checkpointer for local development/testing
+    checkpointer = InMemorySaver()
+    print("✓ Using in-memory checkpointer (set USE_POSTGRES_CHECKPOINT=true for PostgreSQL)")
 
 
 ######################################### 
@@ -36,7 +46,8 @@ except Exception as e:
 vendor_onboarding_graph = create_vendor_onboarding_workflow()
 vendor_onboarding_app = vendor_onboarding_graph.compile(
     checkpointer=checkpointer,
-    interrupt_before=["central_review"]  # Pause before central manager review
+    interrupt_before=["central_review"],  # Pause for central manager review
+    interrupt_after=["parallel_routing"]  # Pause after setting up dept review for approvals
 )
 
 print("✓ Vendor onboarding workflow compiled")
@@ -96,32 +107,29 @@ def execute_workflow(workflow_type: str, initial_state: dict, thread_id: str):
 def resume_workflow(workflow_type: str, thread_id: str, update_state: dict):
     """
     Resume a paused workflow (e.g., after human approval).
-    
+
     Args:
         workflow_type: "vendor_onboarding", etc.
         thread_id: The thread_id used in initial execution
         update_state: State updates (e.g., approval data)
-    
+
     Returns:
         Updated final state
     """
     app = get_workflow(workflow_type)
-    
+
     config = {
         "configurable": {
             "thread_id": thread_id
         }
     }
-    
-    # Get current state from checkpoint
-    current_state = app.get_state(config)
-    
-    # Merge updates
-    updated_state = {**current_state.values, **update_state}
-    
-    # Resume execution
-    result = app.invoke(updated_state, config)
-    
+
+    # Update the state in the checkpoint with the new data
+    app.update_state(config, update_state)
+
+    # Resume execution from the interrupted point by invoking with None
+    result = app.invoke(None, config)
+
     return result
 
 

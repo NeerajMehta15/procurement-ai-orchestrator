@@ -146,46 +146,23 @@ def test_vendor_onboarding_workflow():
     # STEP 5: Simulate Department Approvals (Parallel)
     # ========================================
     print_section("Step 5: Department Approvals (Finance, Legal, Business)")
-    
-    # Finance approves
-    print("\n[Finance Team] Reviewing...")
-    finance_approval = {
+
+    # All departments approve in parallel (collected before resuming workflow)
+    print("\n[All Teams] Reviewing in parallel...")
+    all_dept_approvals = {
         "dept_approvals": {
-            **result['dept_approvals'],
             "finance": {
                 "approved": True,
                 "timestamp": datetime.now().isoformat(),
                 "comments": "Budget allocated, payment terms acceptable",
                 "user_id": "finance-001"
-            }
-        }
-    }
-    
-    result = resume_workflow("vendor_onboarding", request_id, finance_approval)
-    print(f"✓ Finance approved")
-    
-    # Legal approves
-    print("\n[Legal Team] Reviewing...")
-    legal_approval = {
-        "dept_approvals": {
-            **result['dept_approvals'],
+            },
             "legal": {
                 "approved": True,
                 "timestamp": datetime.now().isoformat(),
                 "comments": "Contract terms reviewed, compliance verified",
                 "user_id": "legal-001"
-            }
-        }
-    }
-    
-    result = resume_workflow("vendor_onboarding", request_id, legal_approval)
-    print(f"✓ Legal approved")
-    
-    # Business approves
-    print("\n[Business Team] Reviewing...")
-    business_approval = {
-        "dept_approvals": {
-            **result['dept_approvals'],
+            },
             "business": {
                 "approved": True,
                 "timestamp": datetime.now().isoformat(),
@@ -194,11 +171,16 @@ def test_vendor_onboarding_workflow():
             }
         }
     }
-    
-    result = resume_workflow("vendor_onboarding", request_id, business_approval)
-    print(f"✓ Business approved")
-    
-    
+
+    print("  [Finance] Approved - Budget allocated, payment terms acceptable")
+    print("  [Legal] Approved - Contract terms reviewed, compliance verified")
+    print("  [Business] Approved - Strategic fit confirmed, capabilities verified")
+
+    result = resume_workflow("vendor_onboarding", request_id, all_dept_approvals)
+    print(f"\n✓ All departments approved")
+    print(f"   Status: {result['current_status']}")
+
+
     # ========================================
     # STEP 6: Check Final Status
     # ========================================

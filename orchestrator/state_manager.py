@@ -8,6 +8,7 @@ from psycopg2.extras import Json, RealDictCursor
 from datetime import datetime
 from typing import Optional, Dict, Any
 import os
+from urllib.parse import urlparse, unquote
 from dotenv import load_dotenv
 
 from orchestrator.states import (
@@ -21,10 +22,27 @@ from orchestrator.states import (
 
 load_dotenv()
 
+# Flag to enable/disable database operations
+DB_ENABLED = os.getenv("DB_ENABLED", "false").lower() == "true"
+
 # Database connection
 def get_db_connection():
     """Get PostgreSQL connection to Supabase"""
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL not set")
+
+    # Parse URL and decode password to handle special characters
+    parsed = urlparse(db_url)
+    password = unquote(parsed.password) if parsed.password else None
+
+    return psycopg2.connect(
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        database=parsed.path.lstrip('/'),
+        user=parsed.username,
+        password=password
+    )
 
 
 ######################################### 
@@ -36,6 +54,10 @@ def sync_vendor_state_to_db(state: VendorOnboardingState) -> None:
     Sync vendor onboarding state to database.
     Updates: vendors, workflow_requests, workflow_state_transitions
     """
+    if not DB_ENABLED:
+        print(f"[DB SKIP] sync_vendor_state_to_db (DB_ENABLED=false)")
+        return
+
     conn = get_db_connection()
     cur = conn.cursor()
     
@@ -104,6 +126,10 @@ def sync_vendor_state_to_db(state: VendorOnboardingState) -> None:
 
 def load_vendor_state_from_db(request_id: str) -> Optional[VendorOnboardingState]:
     """Load vendor onboarding state from database"""
+    if not DB_ENABLED:
+        print(f"[DB SKIP] load_vendor_state_from_db (DB_ENABLED=false)")
+        return None
+
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
@@ -155,13 +181,17 @@ def load_vendor_state_from_db(request_id: str) -> Optional[VendorOnboardingState
 
 
 def log_state_transition(
-    request_id: str, 
-    from_status: Optional[str], 
+    request_id: str,
+    from_status: Optional[str],
     to_status: str,
     user_id: Optional[str] = None,
     reason: Optional[str] = None
 ) -> None:
     """Log workflow state transition for audit trail"""
+    if not DB_ENABLED:
+        print(f"[DB SKIP] log_state_transition {from_status} -> {to_status} (DB_ENABLED=false)")
+        return
+
     conn = get_db_connection()
     cur = conn.cursor()
     
@@ -186,6 +216,10 @@ def save_approval(
     comments: Optional[str] = None
 ) -> None:
     """Save approval decision to database"""
+    if not DB_ENABLED:
+        print(f"[DB SKIP] save_approval {approval_type}={decision} (DB_ENABLED=false)")
+        return
+
     conn = get_db_connection()
     cur = conn.cursor()
     
@@ -213,9 +247,12 @@ def save_approval(
 
 def check_vendor_approved(vendor_id: str) -> bool:
     """Rule-based check: Is vendor approved?"""
+    if not DB_ENABLED:
+        return True  # Assume approved when DB is disabled
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         cur.execute("SELECT status FROM vendors WHERE id = %s", (vendor_id,))
         result = cur.fetchone()
@@ -227,9 +264,12 @@ def check_vendor_approved(vendor_id: str) -> bool:
 
 def check_sku_approved(sku_id: str) -> bool:
     """Rule-based check: Is SKU approved?"""
+    if not DB_ENABLED:
+        return True  # Assume approved when DB is disabled
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         cur.execute("SELECT status FROM skus WHERE id = %s", (sku_id,))
         result = cur.fetchone()
@@ -241,9 +281,12 @@ def check_sku_approved(sku_id: str) -> bool:
 
 def check_price_approved(price_id: str) -> bool:
     """Rule-based check: Is price approved?"""
+    if not DB_ENABLED:
+        return True  # Assume approved when DB is disabled
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         cur.execute("SELECT status FROM prices WHERE id = %s", (price_id,))
         result = cur.fetchone()
@@ -255,9 +298,12 @@ def check_price_approved(price_id: str) -> bool:
 
 def check_po_exists(po_id: str) -> bool:
     """Rule-based check: Does PO exist?"""
+    if not DB_ENABLED:
+        return True  # Assume exists when DB is disabled
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         cur.execute("SELECT id FROM purchase_orders WHERE id = %s", (po_id,))
         return cur.fetchone() is not None
@@ -268,9 +314,12 @@ def check_po_exists(po_id: str) -> bool:
 
 def check_grn_exists(grn_id: str) -> bool:
     """Rule-based check: Does GRN exist?"""
+    if not DB_ENABLED:
+        return True  # Assume exists when DB is disabled
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
+
     try:
         cur.execute("SELECT id FROM grns WHERE id = %s", (grn_id,))
         return cur.fetchone() is not None
